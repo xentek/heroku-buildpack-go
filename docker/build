@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -ex 
+export TDIR=$(jq -r '.ImportPath' < /app/.gt/Godeps/Godeps.json)
+mkdir -p /app/src/$(dirname $TDIR) && \
+mv /app/.gt /app/src/$TDIR && \
+cd /app/src/$TDIR && \
+godep go install ./...
