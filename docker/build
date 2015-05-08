@@ -1,8 +1,16 @@
 #!/bin/bash
 
 set -ex 
-export TDIR=$(jq -r '.ImportPath' < /app/.gt/Godeps/Godeps.json)
-mkdir -p /app/src/$(dirname $TDIR) && \
-mv /app/.gt /app/src/$TDIR && \
-cd /app/src/$TDIR && \
-godep go install ./...
+
+if [ -f /app/src/Godeps ]; then
+  TDIR=$(jq -r '.ImportPath' < /app/src/Godeps)
+elif [ -f /app/src/Godeps/Godeps.json ]; then  
+  TDIR=$(jq -r '.ImportPath' < /app/src/Godeps/Godeps.json)
+elif [ -f /app/src/.godir ]; then
+  TDIR=$(cat /app/go/t/.godir)
+fi
+
+mkdir -p /app/go/src/$(dirname $TDIR) && \
+  ln -s /app/src /app/go/src/$TDIR && \
+  cd /app/go/src/$TDIR && \
+  godep go install ./...
