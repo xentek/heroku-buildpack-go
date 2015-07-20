@@ -186,6 +186,10 @@ cd $p
 if test -e $build/Godeps
 then
     step "Running: godep go install ${FLAGS[@]} ./..."
+    echo "fb: find $build"
+    find $build
+    echo "dc: find $cache"
+    find $cache
     godep go install "${FLAGS[@]}" ./...
 else
     step "Running: go get ${FLAGS[@]} ./..."
