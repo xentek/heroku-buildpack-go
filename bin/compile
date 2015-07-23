@@ -40,6 +40,9 @@ build=$(cd "$1/" && pwd)
 cache=$(cd "$2/" && pwd)
 buildpack=$(cd "$(dirname $0)/.." && pwd)
 arch=$(uname -m|tr A-Z a-z)
+if test -d $build/.docker
+then docker="true"
+fi
 if test $arch = x86_64
 then arch=amd64
 fi
@@ -71,29 +74,35 @@ start() {
 finished() {
     echo "done"
 }
+if $docker
+then
+    check_target=$build/.docker
+else
+    check_target=$build
+fi
 
-if test -f $build/Godeps
+if test -f $check_target/Godeps
 then
     warn "Deprecated, old ./Godeps file found!"
     warn "Please upgrade godeps (go get -u github.com/tools/godep) and"
     warn "re-save your dependencies: godep save -r ./..."
-    name=$(<$build/Godeps jq -r .ImportPath)
-    ver=$(<$build/Godeps jq -r .GoVersion)
-elif test -f $build/Godeps/Godeps.json
+    name=$(<$check_target/Godeps jq -r .ImportPath)
+    ver=$(<$check_target/Godeps jq -r .GoVersion)
+elif test -f $check_target/Godeps/Godeps.json
 then
     step "Checking Godeps/Godeps.json file."
-    if ! jq -r . < $build/Godeps/Godeps.json > /dev/null
+    if ! jq -r . < $check_target/Godeps/Godeps.json > /dev/null
     then
         warn "Bad Godeps/Godeps.json file"
         exit 1
     fi
-    name=$(<$build/Godeps/Godeps.json jq -r .ImportPath)
-    ver=$(<$build/Godeps/Godeps.json jq -r .GoVersion)
-elif test -f $build/.godir
+    name=$(<$check_target/Godeps/Godeps.json jq -r .ImportPath)
+    ver=$(<$check_target/Godeps/Godeps.json jq -r .GoVersion)
+elif test -f $check_target/.godir
 then
     warn "Deprecated, .godir file found!"
     warn "Please switch to godeps (github.com/tools/godep) ASAP"
-    name=$(cat $build/.godir)
+    name=$(cat $check_target/.godir)
     ver=go${GOVERSION:-1.4.2}
 else
     warn "Godeps are required. For instructions:"
@@ -104,7 +113,7 @@ fi
 file=${GOFILE:-$ver.$(uname|tr A-Z a-z)-amd64$(platext $ver).tar.gz}
 url=${GOURL:-$(urlfor $ver $file)}
 
-if test -e $build/bin && ! test -d $build/bin
+if test -e $check_target/bin && ! test -d $check_target/bin
 then
     warn "File bin exists and is not a directory."
     exit 1
@@ -128,11 +137,10 @@ fi
 mkdir -p $build/bin
 GOBIN=$build/bin export GOBIN
 GOROOT=$cache/$ver/go export GOROOT
-GOPATH=$build/.heroku/go export GOPATH
+GOPATH=$build export GOPATH
 PATH=$GOROOT/bin:$PATH
 
-
-if ! (test -d $build/Godeps || (which hg >/dev/null && which bzr >/dev/null))
+if ! (test -d $check_target/Godeps || (which hg >/dev/null && which bzr >/dev/null))
 then
     echo
     echo "       Tired of waiting for bzr and hg?"
@@ -154,8 +162,14 @@ then
 fi
 
 p=$GOPATH/src/$name
-mkdir -p $p
-cp -R $build/* $p
+if $docker
+then
+    mkdir -p $(dirname $p)
+    mv $build/.docker/ $p
+else
+    mkdir -p $p
+    cp -R $build/* $p
+fi
 
 # Default to $SOURCE_VERSION environment variable
 GO_LINKER_VALUE=${SOURCE_VERSION}
@@ -183,7 +197,7 @@ fi
 
 unset GIT_DIR # unset git dir or it will mess with goinstall
 cd $p
-if test -e $build/Godeps
+if test -e $p/Godeps
 then
     step "Running: godep go install ${FLAGS[@]} ./..."
     godep go install "${FLAGS[@]}" ./...
@@ -193,7 +207,13 @@ else
 fi
 
 rm -rf $build/.heroku
-
-mkdir -p $build/.profile.d
-echo 'PATH=$PATH:$HOME/bin' > $build/.profile.d/go.sh
-cp $buildpack/vendor/concurrency.sh $build/.profile.d/
+if $docker
+then
+    # GOPATH is handled by the Dockerfile
+    echo "export GOROOT=$GOROOT" >> $HOME/.profile.d/go.sh
+    echo 'export PATH=$GOROOT/bin:$PATH' >> $HOME/.profile.d/go.sh
+else
+    mkdir -p $build/.profile.d
+    echo 'PATH=$PATH:$HOME/bin' > $build/.profile.d/go.sh
+    cp $buildpack/vendor/concurrency.sh $build/.profile.d/
+fi
