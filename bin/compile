@@ -209,9 +209,10 @@ fi
 rm -rf $build/.heroku
 if $docker
 then
-    # GOPATH is handled by the Dockerfile
+    # While GOPATH is handled by the Dockerfile, release to heroku requires it here
+    echo "export GOPATH=$GOPATH" >> $HOME/.profile.d/go.sh
     echo "export GOROOT=$GOROOT" >> $HOME/.profile.d/go.sh
-    echo 'export PATH=$GOROOT/bin:$PATH' >> $HOME/.profile.d/go.sh
+    echo 'export PATH=$GOPATH/bin:$GOROOT/bin:$PATH' >> $HOME/.profile.d/go.sh
 else
     mkdir -p $build/.profile.d
     echo 'PATH=$PATH:$HOME/bin' > $build/.profile.d/go.sh
